@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>体調報告アプリ</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.39.0/umd/supabase.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .app-title {
+            font-size: 24px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .user-selection {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .user-btn {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border: 1px solid #333;
+            background: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .user-btn.active {
+            background: #333;
+            color: white;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .nav-btn {
+            padding: 10px 20px;
+            border: 1px solid #333;
+            background: white;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .nav-btn.active {
+            background: #333;
+            color: white;
+        }
+
+        .nav-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .nav-btn.active:hover {
+            background: #555;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 30px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .scale-buttons {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .scale-btn {
+            padding: 15px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            font-size: 16px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .scale-btn:hover {
+            border-color: #333;
+        }
+
+        .scale-btn.selected {
+            background: #333 !important;
+            color: white !important;
+            border-color: #333 !important;
+        }
+
+        .scale-legend {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .symptom-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .symptom-btn {
+            padding: 15px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .symptom-btn:hover {
+            border-color: #333;
+        }
+
+        .symptom-btn.selected {
+            background: #333 !important;
+            color: white !important;
+            border-color: #333 !important;
+        }
+
+        .activity-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .activity-btn {
+            padding: 20px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            font-size: 16px;
+            text-align: left;
+            transition: all 0.2s;
+        }
+
+        .activity-btn:hover {
+            border-color: #333;
+        }
+
+        .activity-btn.selected {
+            background: #333 !important;
+            color: white !important;
+            border-color: #333 !important;
+        }
+
+        .activity-btn.emergency {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+
+        .activity-btn.emergency.selected {
+            background: #dc3545;
+            color: white;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 20px;
+            background: #333;
+            color: white;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: all 0.2s;
+        }
+
+        .submit-btn:hover {
+            background: #555;
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .reports-list {
+            border: 1px solid #ddd;
+        }
+
+        .report-item {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .report-item:last-child {
+            border-bottom: none;
+        }
+
+        .report-item.emergency {
+            background: #fff5f5;
+            border-left: 4px solid #dc3545;
+        }
+
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .report-date {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .emergency-badge {
+            background: #dc3545;
+            color: white;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 3px;
+        }
+
+        .report-content {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .condition-item {
+            text-align: center;
+        }
+
+        .condition-name {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .condition-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .report-details {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .no-reports {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .notification-setup {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .notification-btn {
+            width: 100%;
+            padding: 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .notification-btn:hover {
+            background: #0056b3;
+        }
+
+        .notification-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            color: #721c24;
+        }
+
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            color: #155724;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .refresh-btn:hover {
+            background: #0056b3;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+
+            .scale-buttons {
+                grid-template-columns: repeat(5, 1fr);
+                gap: 5px;
+            }
+
+            .scale-btn {
+                padding: 12px 8px;
+                font-size: 14px;
+            }
+
+            .symptom-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .report-content {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .user-btn {
+                margin: 5px;
+                padding: 8px 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="app-title">体調報告</h1>
+            
+            <div class="user-selection">
+                <div style="margin-bottom: 10px; font-size: 14px; color: #666;">利用者を選択：</div>
+                <button class="user-btn" onclick="setUser('reporter')" id="reporter-btn">報告者</button>
+                <button class="user-btn" onclick="setUser('viewer')" id="viewer-btn">確認者（奥様）</button>
+            </div>
+
+            <div class="nav-buttons" id="nav-buttons" style="display: none;">
+                <button class="nav-btn active" onclick="showSection('report')" id="report-nav">報告する</button>
+                <button class="nav-btn" onclick="showSection('history')" id="history-nav">履歴を見る</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            読み込み中...
+        </div>
+
+        <div id="error-message" class="error" style="display: none;"></div>
+        <div id="success-message" class="success" style="display: none;"></div>
+
+        <!-- 報告セクション -->
+        <div id="report-section" class="section">
+            <form id="health-form">
+                <div class="form-group">
+                    <label class="form-label">クローン病の状態</label>
+                    <div class="scale-buttons" data-field="crohn">
+                        <button type="button" class="scale-btn" data-value="1">1</button>
+                        <button type="button" class="scale-btn" data-value="2">2</button>
+                        <button type="button" class="scale-btn" data-value="3">3</button>
+                        <button type="button" class="scale-btn" data-value="4">4</button>
+                        <button type="button" class="scale-btn" data-value="5">5</button>
+                        <button type="button" class="scale-btn" data-value="6">6</button>
+                        <button type="button" class="scale-btn" data-value="7">7</button>
+                        <button type="button" class="scale-btn" data-value="8">8</button>
+                        <button type="button" class="scale-btn" data-value="9">9</button>
+                        <button type="button" class="scale-btn" data-value="10">10</button>
+                    </div>
+                    <div class="scale-legend">
+                        <span>軽度</span>
+                        <span>重度</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">重症筋無力症の状態</label>
+                    <div class="scale-buttons" data-field="myasthenia">
+                        <button type="button" class="scale-btn" data-value="1">1</button>
+                        <button type="button" class="scale-btn" data-value="2">2</button>
+                        <button type="button" class="scale-btn" data-value="3">3</button>
+                        <button type="button" class="scale-btn" data-value="4">4</button>
+                        <button type="button" class="scale-btn" data-value="5">5</button>
+                        <button type="button" class="scale-btn" data-value="6">6</button>
+                        <button type="button" class="scale-btn" data-value="7">7</button>
+                        <button type="button" class="scale-btn" data-value="8">8</button>
+                        <button type="button" class="scale-btn" data-value="9">9</button>
+                        <button type="button" class="scale-btn" data-value="10">10</button>
+                    </div>
+                    <div class="scale-legend">
+                        <span>軽度</span>
+                        <span>重度</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">線維筋痛症の状態</label>
+                    <div class="scale-buttons" data-field="fibromyalgia">
+                        <button type="button" class="scale-btn" data-value="1">1</button>
+                        <button type="button" class="scale-btn" data-value="2">2</button>
+                        <button type="button" class="scale-btn" data-value="3">3</button>
+                        <button type="button" class="scale-btn" data-value="4">4</button>
+                        <button type="button" class="scale-btn" data-value="5">5</button>
+                        <button type="button" class="scale-btn" data-value="6">6</button>
+                        <button type="button" class="scale-btn" data-value="7">7</button>
+                        <button type="button" class="scale-btn" data-value="8">8</button>
+                        <button type="button" class="scale-btn" data-value="9">9</button>
+                        <button type="button" class="scale-btn" data-value="10">10</button>
+                    </div>
+                    <div class="scale-legend">
+                        <span>軽度</span>
+                        <span>重度</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">特に気になる症状（複数選択可）</label>
+                    <div class="symptom-grid" data-field="symptoms">
+                        <button type="button" class="symptom-btn" data-value="abdominal_pain">腹痛</button>
+                        <button type="button" class="symptom-btn" data-value="diarrhea">下痢</button>
+                        <button type="button" class="symptom-btn" data-value="loss_of_appetite">食欲不振</button>
+                        <button type="button" class="symptom-btn" data-value="general_weakness">全身脱力</button>
+                        <button type="button" class="symptom-btn" data-value="localized_weakness">部分的脱力</button>
+                        <button type="button" class="symptom-btn" data-value="general_pain">全身痛</button>
+                        <button type="button" class="symptom-btn" data-value="localized_pain">部分的痛み</button>
+                        <button type="button" class="symptom-btn" data-value="fatigue">強い疲労感</button>
+                        <button type="button" class="symptom-btn" data-value="other" id="other-symptom-btn">その他</button>
+                    </div>
+                    <div id="other-symptom-input" style="display: none; margin-top: 15px;">
+                        <input type="text" id="other-symptom-text" placeholder="症状を入力してください" style="width: 100%; padding: 15px; border: 1px solid #ddd; font-size: 16px;">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">今日の活動レベル</label>
+                    <div class="activity-buttons" data-field="activity">
+                        <button type="button" class="activity-btn" data-value="excellent">🛒 外出・買い物可能</button>
+                        <button type="button" class="activity-btn" data-value="good">🏠 家事は可能</button>
+                        <button type="button" class="activity-btn" data-value="moderate">🪑 座っていれば大丈夫</button>
+                        <button type="button" class="activity-btn" data-value="rest">🛏️ 横になっていたい</button>
+                        <button type="button" class="activity-btn emergency" data-value="emergency">🚨 非常に辛い</button>
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn">報告を送信</button>
+            </form>
+        </div>
+
+        <!-- 履歴セクション -->
+        <div id="history-section" class="section">
+            <div class="notification-setup">
+                <h3>通知設定</h3>
+                <p>新しい報告が届いたときに通知を受け取れます</p>
+                <button class="notification-btn" onclick="requestNotificationPermission()">通知を有効にする</button>
+            </div>
+            
+            <div id="reports-container">
+                <div class="no-reports">まだ報告がありません</div>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="loadReports()" title="更新">🔄</button>
+
+    <script>
+        // Supabase設定（この部分は後で実際の値に置き換えます）
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        let supabase;
+        
+        // アプリの状態管理
+        let currentUser = null;
+        let currentFormData = {
+            crohn: null,
+            myasthenia: null,
+            fibromyalgia: null,
+            symptoms: [],
+            otherSymptom: '',
+            activity: null
+        };
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSupabase();
+            setupEventListeners();
+        });
+
+        // Supabase初期化
+        function initializeSupabase() {
+            if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        }
+
+        // ユーザー設定
+        function setUser(userType) {
+            currentUser = userType;
+            
+            // ボタンの状態更新
+            document.querySelectorAll('.user-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(userType + '-btn').classList.add('active');
+            
+            // ナビゲーションの表示
+            document.getElementById('nav-buttons').style.display = 'flex';
+            
+            // 適切なセクションを表示
+            if (userType === 'reporter') {
+                showSection('report');
+            } else {
+                showSection('history');
+                loadReports();
+            }
+        }
+
+        // イベントリスナーの設定
+        function setupEventListeners() {
+            // スケールボタンのイベント
+            document.querySelectorAll('.scale-buttons .scale-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const field = this.closest('.scale-buttons').dataset.field;
+                    const value = parseInt(this.dataset.value);
+                    
+                    // 同じグループの他のボタンの選択を解除
+                    this.closest('.scale-buttons').querySelectorAll('.scale-btn').forEach(b => {
+                        b.classList.remove('selected');
+                    });
+                    
+                    // 現在のボタンを選択
+                    this.classList.add('selected');
+                    currentFormData[field] = value;
+                    
+                    console.log(`${field} selected:`, value); // デバッグ用
+                });
+            });
+
+            // 症状ボタンのイベント
+            document.querySelectorAll('.symptom-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const value = this.dataset.value;
+                    
+                    if (value === 'other') {
+                        // その他の症状の処理
+                        const inputDiv = document.getElementById('other-symptom-input');
+                        if (this.classList.contains('selected')) {
+                            // 選択解除
+                            this.classList.remove('selected');
+                            inputDiv.style.display = 'none';
+                            currentFormData.symptoms = currentFormData.symptoms.filter(s => s !== 'other');
+                            currentFormData.otherSymptom = '';
+                            document.getElementById('other-symptom-text').value = '';
+                        } else {
+                            // 選択
+                            this.classList.add('selected');
+                            inputDiv.style.display = 'block';
+                            if (!currentFormData.symptoms.includes('other')) {
+                                currentFormData.symptoms.push('other');
+                            }
+                            document.getElementById('other-symptom-text').focus();
+                        }
+                    } else {
+                        if (this.classList.contains('selected')) {
+                            // 選択解除
+                            this.classList.remove('selected');
+                            currentFormData.symptoms = currentFormData.symptoms.filter(s => s !== value);
+                        } else {
+                            // 選択
+                            this.classList.add('selected');
+                            if (!currentFormData.symptoms.includes(value)) {
+                                currentFormData.symptoms.push(value);
+                            }
+                        }
+                    }
+                    
+                    console.log('Symptoms selected:', currentFormData.symptoms); // デバッグ用
+                });
+            });
+
+            // その他の症状入力フィールドのイベント
+            document.getElementById('other-symptom-text').addEventListener('input', function() {
+                currentFormData.otherSymptom = this.value;
+            });
+
+            // 活動レベルボタンのイベント
+            document.querySelectorAll('.activity-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const value = this.dataset.value;
+                    
+                    // 同じグループの他のボタンの選択を解除
+                    this.closest('.activity-buttons').querySelectorAll('.activity-btn').forEach(b => {
+                        b.classList.remove('selected');
+                    });
+                    
+                    // 現在のボタンを選択
+                    this.classList.add('selected');
+                    currentFormData.activity = value;
+                    
+                    console.log('Activity selected:', value); // デバッグ用
+                });
+            });
+
+            // フォーム送信のイベント
+            document.getElementById('health-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                submitReport();
+            });
+        }
+
+        // セクション切り替え
+        function showSection(sectionName) {
+            // ナビボタンの更新
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(sectionName + '-nav').classList.add('active');
+
+            // セクションの表示切り替え
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(sectionName + '-section').classList.add('active');
+
+            if (sectionName === 'history') {
+                loadReports();
+            }
+        }
+
+        // 報告の送信
+        async function submitReport() {
+            // バリデーション
+            if (!currentFormData.crohn || !currentFormData.myasthenia || !currentFormData.fibromyalgia || !currentFormData.activity) {
+                showError('すべての項目を選択してください');
+                return;
+            }
+
+            // その他の症状が選択されているが入力されていない場合
+            if (currentFormData.symptoms.includes('other') && !currentFormData.otherSymptom.trim()) {
+                showError('その他の症状を入力してください');
+                return;
+            }
+
+            showLoading(true);
+
+            try {
+                // レポートデータの作成
+                const report = {
+                    timestamp: new Date().toISOString(),
+                    crohn: currentFormData.crohn,
+                    myasthenia: currentFormData.myasthenia,
+                    fibromyalgia: currentFormData.fibromyalgia,
+                    symptoms: currentFormData.symptoms,
+                    other_symptom: currentFormData.otherSymptom,
+                    activity: currentFormData.activity,
+                    is_emergency: currentFormData.activity === 'emergency'
+                };
+
+                if (supabase) {
+                    // Supabaseに保存
+                    const { data, error } = await supabase
+                        .from('health_reports')
+                        .insert([report]);
+
+                    if (error) throw error;
+                } else {
+                    // フォールバック：ローカルストレージに保存
+                    const reports = getStoredReports();
+                    report.id = Date.now();
+                    reports.unshift(report);
+                    localStorage.setItem('health_reports', JSON.stringify(reports));
+                }
+
+                // 通知の送信
+                if (currentFormData.activity === 'emergency') {
+                    sendNotification('🚨 緊急報告', '緊急の体調報告が届きました');
+                } else {
+                    sendNotification('📊 体調報告', '新しい体調報告が届きました');
+                }
+
+                // フォームのリセット
+                resetForm();
+                
+                showSuccess('報告を送信しました');
+                
+                // 履歴画面に切り替え
+                setTimeout(() => {
+                    showSection('history');
+                }, 1500);
+
+            } catch (error) {
+                console.error('Error submitting report:', error);
+                showError('報告の送信に失敗しました。もう一度お試しください。');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // フォームのリセット
+        function resetForm() {
+            currentFormData = {
+                crohn: null,
+                myasthenia: null,
+                fibromyalgia: null,
+                symptoms: [],
+                otherSymptom: '',
+                activity: null
+            };
+
+            document.querySelectorAll('.selected').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+
+            // その他の症状入力をリセット
+            document.getElementById('other-symptom-input').style.display = 'none';
+            document.getElementById('other-symptom-text').value = '';
+        }
+
+        // ローカルストレージから報告を取得
+        function getStoredReports() {
+            const stored = localStorage.getItem('health_reports');
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        // 報告履歴の読み込み
+        async function loadReports() {
+            showLoading(true);
+
+            try {
+                let reports = [];
+
+                if (supabase) {
+                    // Supabaseから取得
+                    const { data, error } = await supabase
+                        .from('health_reports')
+                        .select('*')
+                        .order('timestamp', { ascending: false });
+
+                    if (error) throw error;
+                    reports = data || [];
+                } else {
+                    // フォールバック：ローカルストレージから取得
+                    reports = getStoredReports();
+                }
+
+                displayReports(reports);
+
+            } catch (error) {
+                console.error('Error loading reports:', error);
+                showError('報告の読み込みに失敗しました。');
+                // フォールバックでローカルストレージから読み込み
+                displayReports(getStoredReports());
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // 報告の表示
+        function displayReports(reports) {
+            const container = document.getElementById('reports-container');
+
+            if (reports.length === 0) {
+                container.innerHTML = '<div class="no-reports">まだ報告がありません</div>';
+                return;
+            }
+
+            const symptomsLabels = {
+                'abdominal_pain': '腹痛',
+                'diarrhea': '下痢',
+                'loss_of_appetite': '食欲不振',
+                'general_weakness': '全身脱力',
+                'localized_weakness': '部分的脱力',
+                'general_pain': '全身痛',
+                'localized_pain': '部分的痛み',
+                'fatigue': '強い疲労感',
+                'other': 'その他'
+            };
+
+            const activityLabels = {
+                'excellent': '🛒 外出・買い物可能',
+                'good': '🏠 家事は可能',
+                'moderate': '🪑 座っていれば大丈夫',
+                'rest': '🛏️ 横になっていたい',
+                'emergency': '🚨 非常に辛い'
+            };
+
+            const html = reports.map(report => {
+                const date = new Date(report.timestamp);
+                let symptoms = [];
+                
+                if (report.symptoms && report.symptoms.length > 0) {
+                    symptoms = report.symptoms.map(s => {
+                        if (s === 'other' && report.other_symptom) {
+                            return `その他(${report.other_symptom})`;
+                        }
+                        return symptomsLabels[s] || s;
+                    });
+                }
+                
+                const symptomsText = symptoms.length > 0 ? symptoms.join(', ') : 'なし';
+                
+                return `
+                    <div class="report-item ${report.activity === 'emergency' ? 'emergency' : ''}">
+                        <div class="report-header">
+                            <div class="report-date">
+                                ${date.toLocaleDateString('ja-JP')} ${date.toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}
+                            </div>
+                            ${report.activity === 'emergency' ? '<span class="emergency-badge">緊急</span>' : ''}
+                        </div>
+                        <div class="report-content">
+                            <div class="condition-item">
+                                <div class="condition-name">クローン病</div>
+                                <div class="condition-value">${report.crohn}/10</div>
+                            </div>
+                            <div class="condition-item">
+                                <div class="condition-name">重症筋無力症</div>
+                                <div class="condition-value">${report.myasthenia}/10</div>
+                            </div>
+                            <div class="condition-item">
+                                <div class="condition-name">線維筋痛症</div>
+                                <div class="condition-value">${report.fibromyalgia}/10</div>
+                            </div>
+                        </div>
+                        <div class="report-details">
+                            <div><strong>症状:</strong> ${symptomsText}</div>
+                            <div><strong>活動レベル:</strong> ${activityLabels[report.activity]}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        // 通知権限の要求
+        function requestNotificationPermission() {
+            if ('Notification' in window) {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        showSuccess('通知が有効になりました');
+                    } else {
+                        showError('通知の許可が必要です');
+                    }
+                });
+            } else {
+                showError('このブラウザは通知をサポートしていません');
+            }
+        }
+
+        // 通知の送信
+        function sendNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = new Notification(title, {
+                    body: body,
+                    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjZmZmIiBzdHJva2U9IiMzMzMiIHN0cm9rZS13aWR0aD0iMiIvPgo8dGV4dCB4PSIzMiIgeT0iNDAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzMzMyIgdGV4dC1hbmNob3I9Im1pZGRsZSI+📊PC90ZXh0Pgo8L3N2Zz4K',
+                    requireInteraction: title.includes('🚨'),
+                    tag: 'health-report'
+                });
+
+                // 通知をクリックした時の処理
+                notification.onclick = function() {
+                    window.focus();
+                    showSection('history');
+                    notification.close();
+                };
+
+                // 緊急時は長時間表示
+                if (!title.includes('🚨')) {
+                    setTimeout(() => notification.close(), 5000);
+                }
+            }
+        }
+
+        // UI フィードバック関数
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // 定期的な更新（確認者の場合）
+        function startPeriodicRefresh() {
+            if (currentUser === 'viewer') {
+                setInterval(() => {
+                    loadReports();
+                }, 30000); // 30秒ごとに更新
+            }
+        }
+
+        // ページが表示されたときの処理
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && currentUser === 'viewer') {
+                loadReports();
+            }
+        });
+    </script>
+</body>
+</html>
+                
