@@ -718,74 +718,74 @@
 
         // 報告の送信
         async function submitReport() {
-    // バリデーション
-    if (!currentFormData.crohn || !currentFormData.myasthenia || !currentFormData.fibromyalgia || !currentFormData.activity) {
-        showError('すべての項目を選択してください');
-        return;
-    }
-
-    showLoading(true);
-
-    try {
-        const report = {
-            timestamp: new Date().toISOString(),
-            crohn: currentFormData.crohn,
-            myasthenia: currentFormData.myasthenia,
-            fibromyalgia: currentFormData.fibromyalgia,
-            symptoms: currentFormData.symptoms,
-            other_symptom: currentFormData.otherSymptom,
-            activity: currentFormData.activity,
-            is_emergency: currentFormData.activity === 'emergency'
-        };
-
-        let success = false;
-
-        // Supabaseを試行
-        if (supabase) {
+            // バリデーション
+            if (!currentFormData.crohn || !currentFormData.myasthenia || !currentFormData.fibromyalgia || !currentFormData.activity) {
+                showError('すべての項目を選択してください');
+                return;
+            }
+        
+            showLoading(true);
+        
             try {
-                const { data, error } = await supabase
-                    .from('health_reports')
-                    .insert([report]);
-
-                if (!error) {
-                    success = true;
-                    console.log('Saved to Supabase');
+                const report = {
+                    timestamp: new Date().toISOString(),
+                    crohn: currentFormData.crohn,
+                    myasthenia: currentFormData.myasthenia,
+                    fibromyalgia: currentFormData.fibromyalgia,
+                    symptoms: currentFormData.symptoms,
+                    other_symptom: currentFormData.otherSymptom,
+                    activity: currentFormData.activity,
+                    is_emergency: currentFormData.activity === 'emergency'
+                };
+        
+                let success = false;
+        
+                // Supabaseを試行
+                if (supabase) {
+                    try {
+                        const { data, error } = await supabase
+                            .from('health_reports')
+                            .insert([report]);
+        
+                        if (!error) {
+                            success = true;
+                            console.log('Saved to Supabase');
+                        }
+                    } catch (supabaseError) {
+                        console.log('Supabase failed, trying local storage');
+                    }
                 }
-            } catch (supabaseError) {
-                console.log('Supabase failed, trying local storage');
+        
+                // フォールバック：ローカルストレージ
+                if (!success) {
+                    const reports = getStoredReports();
+                    report.id = Date.now();
+                    reports.unshift(report);
+                    localStorage.setItem('health_reports', JSON.stringify(reports));
+                    console.log('Saved to local storage');
+                }
+        
+                // 通知とリセット
+                if (currentFormData.activity === 'emergency') {
+                    sendNotification('🚨 緊急報告', '緊急の体調報告が届きました');
+                } else {
+                    sendNotification('📊 体調報告', '新しい体調報告が届きました');
+                }
+        
+                resetForm();
+                showSuccess('報告を送信しました');
+                
+                setTimeout(() => {
+                    showSection('history');
+                }, 1500);
+        
+            } catch (error) {
+                console.error('Error submitting report:', error);
+                showError('報告の送信に失敗しました。もう一度お試しください。');
+            } finally {
+                showLoading(false);
             }
         }
-
-        // フォールバック：ローカルストレージ
-        if (!success) {
-            const reports = getStoredReports();
-            report.id = Date.now();
-            reports.unshift(report);
-            localStorage.setItem('health_reports', JSON.stringify(reports));
-            console.log('Saved to local storage');
-        }
-
-        // 通知とリセット
-        if (currentFormData.activity === 'emergency') {
-            sendNotification('🚨 緊急報告', '緊急の体調報告が届きました');
-        } else {
-            sendNotification('📊 体調報告', '新しい体調報告が届きました');
-        }
-
-        resetForm();
-        showSuccess('報告を送信しました');
-        
-        setTimeout(() => {
-            showSection('history');
-        }, 1500);
-
-    } catch (error) {
-        console.error('Error submitting report:', error);
-        showError('報告の送信に失敗しました。もう一度お試しください。');
-    } finally {
-        showLoading(false);
-    }
-}
 
         // フォームのリセット
         function resetForm() {
