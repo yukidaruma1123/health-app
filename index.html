@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>体調報告アプリ</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.39.0/umd/supabase.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -586,17 +586,47 @@
             activity: null
         };
 
-        // 初期化
+        // 初期化（Supabase読み込み待ち）
         document.addEventListener('DOMContentLoaded', function() {
-            initializeSupabase();
+            // Supabase読み込み完了を待機
+            waitForSupabaseAndInitialize();
             setupEventListeners();
         });
+
+        // Supabase読み込み完了を待ってから初期化
+        function waitForSupabaseAndInitialize() {
+            let attempts = 0;
+            const maxAttempts = 10;
+            
+            const checkSupabase = () => {
+                attempts++;
+                
+                if (typeof window.supabase !== 'undefined') {
+                    console.log('Supabase library detected, initializing...');
+                    initializeSupabase();
+                } else if (attempts < maxAttempts) {
+                    console.log(`Waiting for Supabase library... (${attempts}/${maxAttempts})`);
+                    setTimeout(checkSupabase, 500);
+                } else {
+                    console.log('Supabase library load timeout, trying alternative method...');
+                    initializeSupabase();
+                }
+            };
+            
+            checkSupabase();
+        }
         
         // Supabase初期化と接続テスト
         async function initializeSupabase() {
             try {
+                // Supabaseライブラリの読み込み確認
                 if (typeof window.supabase === 'undefined') {
-                    throw new Error('Supabase library not loaded');
+                    // 代替CDNを試行
+                    await loadSupabaseFromAlternativeCDN();
+                }
+                
+                if (typeof window.supabase === 'undefined') {
+                    throw new Error('Supabase library could not be loaded from any CDN');
                 }
                 
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -621,6 +651,29 @@
                 updateConnectionStatus(false);
                 showDebug(`Supabase接続エラー: ${error.message}. ローカルストレージを使用します。`);
             }
+        }
+
+        // 代替CDNからSupabaseを読み込む
+        function loadSupabaseFromAlternativeCDN() {
+            return new Promise((resolve, reject) => {
+                // 既存のスクリプトタグを削除
+                const existingScript = document.querySelector('script[src*="supabase"]');
+                if (existingScript) {
+                    existingScript.remove();
+                }
+
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/@supabase/supabase-js@2';
+                script.onload = () => {
+                    console.log('Supabase loaded from unpkg CDN');
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.error('Failed to load Supabase from unpkg CDN');
+                    reject(new Error('CDN load failed'));
+                };
+                document.head.appendChild(script);
+            });
         }
 
         // 接続状態の表示更新
