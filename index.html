@@ -665,8 +665,6 @@
             document.querySelectorAll('.activity-btn').forEach(btn => {
                 btn.addEventListener('click', function(e) {
                     e.preventDefault();
-                    e.stopPropagation();
-                    
                     const value = this.dataset.value;
                     
                     // 同じグループの他のボタンの選択を解除
@@ -677,8 +675,6 @@
                     // 現在のボタンを選択
                     this.classList.add('selected');
                     currentFormData.activity = value;
-                    
-                    console.log('Activity selected:', value); // デバッグ用
                 });
             });
 
@@ -993,4 +989,3 @@
     </script>
 </body>
 </html>
-                
