@@ -955,11 +955,10 @@
         // 報告履歴の読み込み
         async function loadReports() {
             showLoading(true);
+            let reports = [];
+            let source = '';
 
             try {
-                let reports = [];
-                let source = '';
-
                 if (isSupabaseConnected && supabase) {
                     try {
                         // Supabaseから取得
@@ -969,39 +968,50 @@
                             .order('timestamp', { ascending: false });
 
                         if (error) {
+                            console.error('Supabase query error:', error);
                             throw error;
                         }
                         
                         reports = data || [];
                         source = 'Supabase';
+                        console.log(`Successfully loaded ${reports.length} reports from Supabase:`, reports);
                         showDebug(`${reports.length}件の報告をSupabaseから読み込みました`);
                     } catch (supabaseError) {
                         console.error('Supabase load error:', supabaseError);
                         isSupabaseConnected = false;
                         updateConnectionStatus(false);
-                        throw supabaseError;
+                        // フォールバックに進む
+                        reports = getStoredReports();
+                        source = 'ローカルストレージ（Supabaseエラー後）';
+                        showDebug(`Supabaseエラーのため${reports.length}件の報告をローカルストレージから読み込みました`);
                     }
                 } else {
-                    throw new Error('Supabase not connected');
+                    // Supabase未接続の場合
+                    reports = getStoredReports();
+                    source = 'ローカルストレージ';
+                    showDebug(`${reports.length}件の報告をローカルストレージから読み込みました`);
                 }
 
             } catch (error) {
-                console.error('Error loading from Supabase:', error);
-                // フォールバック：ローカルストレージから取得
+                console.error('General error loading reports:', error);
+                // 最終フォールバック：ローカルストレージから取得
                 reports = getStoredReports();
-                source = 'ローカルストレージ';
-                showDebug(`${reports.length}件の報告をローカルストレージから読み込みました`);
+                source = 'ローカルストレージ（エラー後）';
+                showDebug(`エラーのため${reports.length}件の報告をローカルストレージから読み込みました`);
+            } finally {
+                displayReports(reports);
+                showLoading(false);
+                console.log(`Displaying ${reports.length} reports from ${source}`);
             }
-
-            displayReports(reports);
-            showLoading(false);
         }
 
         // 報告の表示
         function displayReports(reports) {
             const container = document.getElementById('reports-container');
+            
+            console.log('displayReports called with:', reports);
 
-            if (reports.length === 0) {
+            if (!reports || reports.length === 0) {
                 container.innerHTML = '<div class="no-reports">まだ報告がありません</div>';
                 return;
             }
@@ -1026,52 +1036,61 @@
                 'emergency': '🚨 非常に辛い'
             };
 
-            const html = reports.map(report => {
-                const date = new Date(report.timestamp);
-                let symptoms = [];
-                
-                if (report.symptoms && report.symptoms.length > 0) {
-                    symptoms = report.symptoms.map(s => {
-                        if (s === 'other' && report.other_symptom) {
-                            return `その他(${report.other_symptom})`;
-                        }
-                        return symptomsLabels[s] || s;
-                    });
-                }
-                
-                const symptomsText = symptoms.length > 0 ? symptoms.join(', ') : 'なし';
-                
-                return `
-                    <div class="report-item ${report.activity === 'emergency' ? 'emergency' : ''}">
-                        <div class="report-header">
-                            <div class="report-date">
-                                ${date.toLocaleDateString('ja-JP')} ${date.toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}
+            try {
+                const html = reports.map((report, index) => {
+                    console.log(`Processing report ${index}:`, report);
+                    
+                    const date = new Date(report.timestamp);
+                    let symptoms = [];
+                    
+                    if (report.symptoms && Array.isArray(report.symptoms) && report.symptoms.length > 0) {
+                        symptoms = report.symptoms.map(s => {
+                            if (s === 'other' && report.other_symptom) {
+                                return `その他(${report.other_symptom})`;
+                            }
+                            return symptomsLabels[s] || s;
+                        });
+                    }
+                    
+                    const symptomsText = symptoms.length > 0 ? symptoms.join(', ') : 'なし';
+                    
+                    return `
+                        <div class="report-item ${report.activity === 'emergency' ? 'emergency' : ''}">
+                            <div class="report-header">
+                                <div class="report-date">
+                                    ${date.toLocaleDateString('ja-JP')} ${date.toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}
+                                </div>
+                                ${report.activity === 'emergency' ? '<span class="emergency-badge">緊急</span>' : ''}
                             </div>
-                            ${report.activity === 'emergency' ? '<span class="emergency-badge">緊急</span>' : ''}
+                            <div class="report-content">
+                                <div class="condition-item">
+                                    <div class="condition-name">クローン病</div>
+                                    <div class="condition-value">${report.crohn || 'N/A'}/10</div>
+                                </div>
+                                <div class="condition-item">
+                                    <div class="condition-name">重症筋無力症</div>
+                                    <div class="condition-value">${report.myasthenia || 'N/A'}/10</div>
+                                </div>
+                                <div class="condition-item">
+                                    <div class="condition-name">線維筋痛症</div>
+                                    <div class="condition-value">${report.fibromyalgia || 'N/A'}/10</div>
+                                </div>
+                            </div>
+                            <div class="report-details">
+                                <div><strong>症状:</strong> ${symptomsText}</div>
+                                <div><strong>活動レベル:</strong> ${activityLabels[report.activity] || report.activity}</div>
+                            </div>
                         </div>
-                        <div class="report-content">
-                            <div class="condition-item">
-                                <div class="condition-name">クローン病</div>
-                                <div class="condition-value">${report.crohn}/10</div>
-                            </div>
-                            <div class="condition-item">
-                                <div class="condition-name">重症筋無力症</div>
-                                <div class="condition-value">${report.myasthenia}/10</div>
-                            </div>
-                            <div class="condition-item">
-                                <div class="condition-name">線維筋痛症</div>
-                                <div class="condition-value">${report.fibromyalgia}/10</div>
-                            </div>
-                        </div>
-                        <div class="report-details">
-                            <div><strong>症状:</strong> ${symptomsText}</div>
-                            <div><strong>活動レベル:</strong> ${activityLabels[report.activity]}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
 
-            container.innerHTML = html;
+                container.innerHTML = html;
+                console.log('Reports displayed successfully');
+
+            } catch (error) {
+                console.error('Error displaying reports:', error);
+                container.innerHTML = '<div class="error">報告の表示中にエラーが発生しました</div>';
+            }
         }
 
         // 通知権限の要求
