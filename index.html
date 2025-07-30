@@ -39,6 +39,24 @@
             margin-bottom: 10px;
         }
 
+        .connection-status {
+            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+
+        .connection-status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .connection-status.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
         .user-selection {
             margin-bottom: 20px;
             text-align: center;
@@ -348,6 +366,16 @@
             color: #155724;
         }
 
+        .debug-info {
+            background: #e2e3e5;
+            border: 1px solid #d1d3d4;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            color: #383d41;
+            font-size: 12px;
+        }
+
         .refresh-btn {
             position: fixed;
             bottom: 20px;
@@ -404,6 +432,10 @@
         <div class="header">
             <h1 class="app-title">体調報告</h1>
             
+            <div id="connection-status" class="connection-status offline">
+                接続確認中...
+            </div>
+            
             <div class="user-selection">
                 <div style="margin-bottom: 10px; font-size: 14px; color: #666;">利用者を選択：</div>
                 <button class="user-btn" onclick="setUser('reporter')" id="reporter-btn">報告者</button>
@@ -422,6 +454,7 @@
 
         <div id="error-message" class="error" style="display: none;"></div>
         <div id="success-message" class="success" style="display: none;"></div>
+        <div id="debug-info" class="debug-info" style="display: none;"></div>
 
         <!-- 報告セクション -->
         <div id="report-section" class="section">
@@ -536,10 +569,11 @@
     <button class="refresh-btn" onclick="loadReports()" title="更新">🔄</button>
 
     <script>
-        // Supabase設定（この部分は後で実際の値に置き換えます）
+        // Supabase設定
         const SUPABASE_URL = 'https://dqjupiziyurfqclmlyyk.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxanVwaXppeXVyZnFjbG1seXlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4NTc1OTcsImV4cCI6MjA2OTQzMzU5N30.DW8Q63QwW6PypDOdZyGDgw-lPlsrnXiiWHgh-62dwaM';
         let supabase;
+        let isSupabaseConnected = false;
         
         // アプリの状態管理
         let currentUser = null;
@@ -558,19 +592,57 @@
             setupEventListeners();
         });
         
-        // Supabase初期化
-        function initializeSupabase() {
+        // Supabase初期化と接続テスト
+        async function initializeSupabase() {
             try {
-                if (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && window.supabase) {
-                    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                    console.log('Supabase initialized successfully');
+                if (typeof window.supabase === 'undefined') {
+                    throw new Error('Supabase library not loaded');
+                }
+                
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                
+                // 接続テスト
+                const { data, error } = await supabase
+                    .from('health_reports')
+                    .select('count')
+                    .limit(1);
+                
+                if (error) {
+                    console.error('Supabase connection error:', error);
+                    throw error;
                 } else {
-                    console.log('Using local storage fallback');
+                    isSupabaseConnected = true;
+                    updateConnectionStatus(true);
+                    showDebug('Supabaseに正常に接続されました');
                 }
             } catch (error) {
                 console.error('Supabase initialization failed:', error);
-                console.log('Falling back to local storage');
+                isSupabaseConnected = false;
+                updateConnectionStatus(false);
+                showDebug(`Supabase接続エラー: ${error.message}. ローカルストレージを使用します。`);
             }
+        }
+
+        // 接続状態の表示更新
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            if (connected) {
+                statusElement.textContent = '✅ オンライン（データ共有中）';
+                statusElement.className = 'connection-status connected';
+            } else {
+                statusElement.textContent = '⚠️ オフライン（ローカルのみ）';
+                statusElement.className = 'connection-status offline';
+            }
+        }
+
+        // デバッグ情報の表示
+        function showDebug(message) {
+            const debugDiv = document.getElementById('debug-info');
+            debugDiv.textContent = message;
+            debugDiv.style.display = 'block';
+            setTimeout(() => {
+                debugDiv.style.display = 'none';
+            }, 10000);
         }
 
         // ユーザー設定
@@ -615,7 +687,7 @@
                     this.classList.add('selected');
                     currentFormData[field] = value;
                     
-                    console.log(`${field} selected:`, value); // デバッグ用
+                    console.log(`${field} selected:`, value);
                 });
             });
 
@@ -660,7 +732,7 @@
                         }
                     }
                     
-                    console.log('Symptoms selected:', currentFormData.symptoms); // デバッグ用
+                    console.log('Symptoms selected:', currentFormData.symptoms);
                 });
             });
 
@@ -686,7 +758,7 @@
                     this.classList.add('selected');
                     currentFormData.activity = value;
                     
-                    console.log('Activity selected:', value); // デバッグ用
+                    console.log('Activity selected:', value);
                 });
             });
 
@@ -739,20 +811,28 @@
                 };
         
                 let success = false;
+                let errorMessage = '';
         
                 // Supabaseを試行
-                if (supabase) {
+                if (isSupabaseConnected && supabase) {
                     try {
                         const { data, error } = await supabase
                             .from('health_reports')
-                            .insert([report]);
+                            .insert([report])
+                            .select();
         
-                        if (!error) {
-                            success = true;
-                            console.log('Saved to Supabase');
+                        if (error) {
+                            throw error;
                         }
+                        
+                        success = true;
+                        showDebug('Supabaseに保存されました');
+                        console.log('Saved to Supabase:', data);
                     } catch (supabaseError) {
-                        console.log('Supabase failed, trying local storage');
+                        console.error('Supabase save error:', supabaseError);
+                        errorMessage = `Supabaseエラー: ${supabaseError.message}`;
+                        isSupabaseConnected = false;
+                        updateConnectionStatus(false);
                     }
                 }
         
@@ -762,26 +842,32 @@
                     report.id = Date.now();
                     reports.unshift(report);
                     localStorage.setItem('health_reports', JSON.stringify(reports));
+                    success = true;
+                    showDebug('ローカルストレージに保存されました');
                     console.log('Saved to local storage');
                 }
         
-                // 通知とリセット
-                if (currentFormData.activity === 'emergency') {
-                    sendNotification('🚨 緊急報告', '緊急の体調報告が届きました');
-                } else {
-                    sendNotification('📊 体調報告', '新しい体調報告が届きました');
-                }
+                if (success) {
+                    // 通知とリセット
+                    if (currentFormData.activity === 'emergency') {
+                        sendNotification('🚨 緊急報告', '緊急の体調報告が届きました');
+                    } else {
+                        sendNotification('📊 体調報告', '新しい体調報告が届きました');
+                    }
         
-                resetForm();
-                showSuccess('報告を送信しました');
-                
-                setTimeout(() => {
-                    showSection('history');
-                }, 1500);
+                    resetForm();
+                    showSuccess('報告を送信しました');
+                    
+                    setTimeout(() => {
+                        showSection('history');
+                    }, 1500);
+                } else {
+                    throw new Error(errorMessage || '保存に失敗しました');
+                }
         
             } catch (error) {
                 console.error('Error submitting report:', error);
-                showError('報告の送信に失敗しました。もう一度お試しください。');
+                showError(`報告の送信に失敗しました: ${error.message}`);
             } finally {
                 showLoading(false);
             }
@@ -819,31 +905,43 @@
 
             try {
                 let reports = [];
+                let source = '';
 
-                if (supabase) {
-                    // Supabaseから取得
-                    const { data, error } = await supabase
-                        .from('health_reports')
-                        .select('*')
-                        .order('timestamp', { ascending: false });
+                if (isSupabaseConnected && supabase) {
+                    try {
+                        // Supabaseから取得
+                        const { data, error } = await supabase
+                            .from('health_reports')
+                            .select('*')
+                            .order('timestamp', { ascending: false });
 
-                    if (error) throw error;
-                    reports = data || [];
+                        if (error) {
+                            throw error;
+                        }
+                        
+                        reports = data || [];
+                        source = 'Supabase';
+                        showDebug(`${reports.length}件の報告をSupabaseから読み込みました`);
+                    } catch (supabaseError) {
+                        console.error('Supabase load error:', supabaseError);
+                        isSupabaseConnected = false;
+                        updateConnectionStatus(false);
+                        throw supabaseError;
+                    }
                 } else {
-                    // フォールバック：ローカルストレージから取得
-                    reports = getStoredReports();
+                    throw new Error('Supabase not connected');
                 }
 
-                displayReports(reports);
-
             } catch (error) {
-                console.error('Error loading reports:', error);
-                showError('報告の読み込みに失敗しました。');
-                // フォールバックでローカルストレージから読み込み
-                displayReports(getStoredReports());
-            } finally {
-                showLoading(false);
+                console.error('Error loading from Supabase:', error);
+                // フォールバック：ローカルストレージから取得
+                reports = getStoredReports();
+                source = 'ローカルストレージ';
+                showDebug(`${reports.length}件の報告をローカルストレージから読み込みました`);
             }
+
+            displayReports(reports);
+            showLoading(false);
         }
 
         // 報告の表示
@@ -973,7 +1071,7 @@
             errorDiv.style.display = 'block';
             setTimeout(() => {
                 errorDiv.style.display = 'none';
-            }, 5000);
+            }, 8000);
         }
 
         function showSuccess(message) {
@@ -989,7 +1087,9 @@
         function startPeriodicRefresh() {
             if (currentUser === 'viewer') {
                 setInterval(() => {
-                    loadReports();
+                    if (isSupabaseConnected) {
+                        loadReports();
+                    }
                 }, 30000); // 30秒ごとに更新
             }
         }
@@ -1000,6 +1100,26 @@
                 loadReports();
             }
         });
+
+        // 接続状態の定期チェック
+        setInterval(async () => {
+            if (!isSupabaseConnected && supabase) {
+                try {
+                    const { data, error } = await supabase
+                        .from('health_reports')
+                        .select('count')
+                        .limit(1);
+                    
+                    if (!error) {
+                        isSupabaseConnected = true;
+                        updateConnectionStatus(true);
+                        showDebug('接続が復旧しました');
+                    }
+                } catch (reconnectError) {
+                    // 接続失敗は無視
+                }
+            }
+        }, 60000); // 1分ごとに接続チェック
     </script>
 </body>
 </html>
